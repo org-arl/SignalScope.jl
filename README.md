@@ -1,5 +1,5 @@
 # SignalScope.jl
-Oscilloscope view from various real-time signal sources
+### Oscilloscope view from various real-time signal sources
 
 This package is not yet registered.
 
