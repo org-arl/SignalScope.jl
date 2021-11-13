@@ -3,7 +3,7 @@ using FFTW
 using SignalBase
 using Statistics
 
-export stop
+export Scope
 
 @enum Mode TIME FREQ TIMEFREQ
 
@@ -23,24 +23,35 @@ mutable struct Scope
   zbuf::Matrix{Float32}
   closed::Bool
   waitfordirty::Threads.Condition
+  src::Any
 end
 
-function Scope(fs::Float32; bufsize=4096, nfft=1024, history=1024)
+function Scope(; fs=48000f0, bufsize=4096, nfft=1024, history=256)
   n = bufsize
   m = nfft ÷ 2 + 1
-  t = range(0f0; length=n, step=1000f0/fs)
+  t = range(0f0; length=n, step=1000f0/Float32(fs))
   y = Node(zeros(Float32, n))
   ybuf = similar(y[])
   z = Node(zeros(Float32, history, m))
   zbuf = similar(z[])
   fap = lines(t, y; axis=(xlabel="Time (ms)", xautolimitmargin=(0f0, 0f0)))
   display(fap)
-  scope = Scope(fap, TIME, fs, n, nfft, y, z, Node(20f0), Node(50f0), true, false,
-    ybuf, zbuf, false, Threads.Condition())
+  scope = Scope(fap, TIME, Float32(fs), n, nfft, y, z, Node(20f0), Node(50f0), true, false,
+    ybuf, zbuf, false, Threads.Condition(), nothing)
   on(events(fap.figure).keyboardbutton) do event
     Consume(keypress(scope, event.action, event.key))
   end
   task = @async monitor(scope)
+  scope
+end
+
+function Scope(ai; nfft=1024, history=256)
+  scope = Scope(; fs=inputframerate(ai), bufsize=inputblocksize(ai), nfft, history)
+  scope.src = ai
+  connect(ai)
+  startinputstream(ai, (t, x) -> begin
+    push!(scope, @view x[:,1])
+  end)
   scope
 end
 
@@ -52,8 +63,7 @@ function Base.close(scope::Scope)
   nothing
 end
 
-Base.run(scope::Scope) = (scope.running = true)
-stop(scope::Scope) = (scope.running = false)
+Base.run(scope::Scope, v=true) = (scope.running = v)
 
 function mode!(scope::Scope, mode::Mode)
   scope.mode == mode && return scope
@@ -73,7 +83,7 @@ function mode!(scope::Scope, mode::Mode)
     scope.z[] .= 0f0
     scope.zbuf .= 0f0
     n = size(scope.z[], 1)
-    t = range(0f0; length=n, step=n/scope.fs)
+    t = range(0f0; length=n, step=scope.n/scope.fs)
     f = rfftfreq(scope.nfft, scope.fs) ./ 1000f0
     scope.fap = heatmap(t, f, scope.z;
       colorrange=@lift(($(scope.zmax) - $(scope.zrange), $(scope.zmax))),
@@ -131,6 +141,11 @@ function monitor(scope::Scope)
   catch ex
     @error ex
   end
+  try
+    scope.src === nothing || Base.close(scope.src)
+  catch ex
+    @error "$ex"
+  end
   display(Figure())
 end
 
@@ -153,6 +168,6 @@ function keypress(scope::Scope, action, key)
   key == Keyboard.t && mode!(scope, TIME)
   key == Keyboard.f && mode!(scope, FREQ)
   key == Keyboard.s && mode!(scope, TIMEFREQ)
-  key == Keyboard.q && close(scope)
+  key == Keyboard.q && Base.close(scope)
   false
 end

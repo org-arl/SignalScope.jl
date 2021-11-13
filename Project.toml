@@ -5,6 +5,8 @@ version = "0.1.0"
 
 [deps]
 FFTW = "7a1cc6ca-52ef-59f5-83cd-3a7055c09341"
+Fjage = "e0fd600c-be67-11e9-1f90-d366689e4029"
 GLMakie = "e9467ef8-e4e7-5192-8a1a-b1aee30e663a"
+Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
 SignalBase = "00c44e92-20f5-44bc-8f45-a1dcef76ba38"
 Statistics = "10745b16-79ce-11e8-11f9-7d13ad32a3b2"
