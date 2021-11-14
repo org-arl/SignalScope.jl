@@ -13,11 +13,15 @@ struct UnetSource
   streaming::Ref{Bool}
 end
 
-function UnetSource(host="127.0.0.1", port=1100; blksize=nothing)
+function UnetSource(host="127.0.0.1", port=1100; blksize=4096, bb=nothing)
   Fjage.registermessages()
   gw = Gateway(host, port)
   try
-    bb = agentforservice(gw, "org.arl.unet.Services.BASEBAND")
+    if bb === nothing
+      bb = agentforservice(gw, "org.arl.unet.Services.BASEBAND")
+    else
+      bb = agent(gw, bb)
+    end
     subscribe(gw, topic(bb))
     blksize === nothing || (bb.pbsblk = blksize)
     blksize = bb.pbsblk

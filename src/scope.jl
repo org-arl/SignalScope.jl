@@ -13,11 +13,13 @@ mutable struct Scope
   fs::Float32
   n::Int
   nfft::Int
+  ch::Observable{Int}
+  dc::Observable{Bool}
   y::Observable{Vector{Float32}}
   z::Observable{Matrix{Float32}}
   zmax::Observable{Float32}
   zrange::Observable{Float32}
-  running::Bool
+  running::Observable{Bool}
   dirty::Bool
   ybuf::Vector{Float32}
   zbuf::Matrix{Float32}
@@ -36,8 +38,9 @@ function Scope(; fs=48000f0, bufsize=4096, nfft=1024, history=256)
   zbuf = similar(z[])
   fap = lines(t, y; axis=(xlabel="Time (ms)", xautolimitmargin=(0f0, 0f0)))
   display(fap)
-  scope = Scope(fap, TIME, Float32(fs), n, nfft, y, z, Node(20f0), Node(50f0), true, false,
-    ybuf, zbuf, false, Threads.Condition(), nothing)
+  scope = Scope(fap, TIME, Float32(fs), n, nfft, Node(1), Node(true), y, z, Node(20f0), Node(50f0),
+    Node(true), false, ybuf, zbuf, false, Threads.Condition(), nothing)
+  annotate(scope)
   on(events(fap.figure).keyboardbutton) do event
     Consume(keypress(scope, event.action, event.key))
   end
@@ -50,7 +53,15 @@ function Scope(ai; nfft=1024, history=256)
   scope.src = ai
   connect(ai)
   startinputstream(ai, (t, x) -> begin
-    push!(scope, @view x[:,1])
+    if scope.ch[] ≤ size(x,2)
+      if scope.dc[]
+        push!(scope, @view x[:,scope.ch[]])
+      else
+        x1 = x[:,scope.ch[]]
+        x1 .-= mean(x1)
+        push!(scope, x1)
+      end
+    end
   end)
   scope
 end
@@ -63,7 +74,7 @@ function Base.close(scope::Scope)
   nothing
 end
 
-Base.run(scope::Scope, v=true) = (scope.running = v)
+Base.run(scope::Scope, v=true) = (scope.running[] = v)
 
 function mode!(scope::Scope, mode::Mode)
   scope.mode == mode && return scope
@@ -92,6 +103,7 @@ function mode!(scope::Scope, mode::Mode)
   else
     throw(ArgumentError("Bad mode"))
   end
+  annotate(scope)
   on(events(scope.fap.figure).keyboardbutton) do event
     Consume(keypress(scope, event.action, event.key))
   end
@@ -130,21 +142,23 @@ function monitor(scope::Scope)
         scope.dirty = false
       end
       scope.closed && break
-      if scope.mode == TIME || scope.mode == FREQ
-        scope.y[] .= scope.ybuf
-        scope.y[] = scope.y[]
-      elseif scope.mode == TIMEFREQ
-        scope.z[] .= scope.zbuf
-        scope.z[] = scope.z[]
+      if scope.running[]
+        if scope.mode == TIME || scope.mode == FREQ
+          scope.y[] .= scope.ybuf
+          scope.y[] = scope.y[]
+        elseif scope.mode == TIMEFREQ
+          scope.z[] .= scope.zbuf
+          scope.z[] = scope.z[]
+        end
       end
     end
   catch ex
     @error ex
   end
   try
-    scope.src === nothing || Base.close(scope.src)
+    scope.src === nothing || close(scope.src)
   catch ex
-    @error "$ex"
+    @warn ex
   end
   display(Figure())
 end
@@ -162,12 +176,36 @@ end
 function keypress(scope::Scope, action, key)
   action == Keyboard.press || return false
   key == Keyboard._0 && reset_limits!(scope.fap.axis)
+  key == Keyboard._1 && (scope.ch[] = 1)
+  key == Keyboard._2 && (scope.ch[] = 2)
+  key == Keyboard._3 && (scope.ch[] = 3)
+  key == Keyboard._4 && (scope.ch[] = 4)
   key == Keyboard.a && autolimits!(scope)
   key == Keyboard.minus && (scope.zmax[] -= 5)
   key == Keyboard.equal && (scope.zmax[] += 5)
   key == Keyboard.t && mode!(scope, TIME)
   key == Keyboard.f && mode!(scope, FREQ)
   key == Keyboard.s && mode!(scope, TIMEFREQ)
-  key == Keyboard.q && Base.close(scope)
+  key == Keyboard.q && close(scope)
+  key == Keyboard.space && (scope.running[] = !scope.running[])
+  key == Keyboard.d && (scope.dc[] = !scope.dc[])
   false
+end
+
+annotation(ch, dc, running) = """
+  Channel $ch
+  $(dc ? "DC coupling" : "AC coupling")
+  $(running ? "RUNNING" : "STOPPED")
+  """
+
+function annotate(scope::Scope)
+  s = lift(annotation, scope.ch, scope.dc, scope.running)
+  fig = scope.fap.figure
+  fig[1,1] = Label(fig, s;
+    textsize = 14.0f0,
+    tellheight = false,
+    tellwidth = false,
+    padding = (10.0f0, 10.0f0, 10.0f0, 10.0f0),
+    halign = :right,
+    valign = :top)
 end
