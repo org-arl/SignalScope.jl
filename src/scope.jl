@@ -91,8 +91,8 @@ function mode!(scope::Scope, mode::Mode)
     scope.fap = lines(f, scope.y; axis=(xlabel="Frequency (kHz)", xautolimitmargin=(0f0, 0f0)))
     ylims!(scope.zmax[] - scope.zrange[], scope.zmax[])
   elseif mode == TIMEFREQ
-    scope.z[] .= 0f0
-    scope.zbuf .= 0f0
+    scope.z[] .= -Inf32
+    scope.zbuf .= -Inf32
     n = size(scope.z[], 1)
     t = range(0f0; length=n, step=scope.n/scope.fs)
     f = rfftfreq(scope.nfft, scope.fs) ./ 1000f0
