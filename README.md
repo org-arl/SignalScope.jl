@@ -12,7 +12,7 @@ pkg> add https://github.com/org-arl/SignalScope.jl
 To run with a demo random source:
 ```julia
 julia> using SignalScope
-julia> Scope(RandomSource())
+julia> Scope(RandomSource(48000f0))
 ```
 
 To connect to [Unet audio](https://unetstack.net/) running on `localhost`:
