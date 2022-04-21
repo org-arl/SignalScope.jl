@@ -32,14 +32,14 @@ function Scope(; fs=48000f0, bufsize=4096, nfft=1024, history=256)
   n = bufsize
   m = nfft ÷ 2 + 1
   t = range(0f0; length=n, step=1000f0/Float32(fs))
-  y = Node(zeros(Float32, n))
+  y = Observable(zeros(Float32, n))
   ybuf = similar(y[])
-  z = Node(zeros(Float32, history, m))
+  z = Observable(zeros(Float32, history, m))
   zbuf = similar(z[])
   fap = lines(t, y; axis=(xlabel="Time (ms)", xautolimitmargin=(0f0, 0f0)))
   display(fap)
-  scope = Scope(fap, TIME, Float32(fs), n, nfft, Node(1), Node(true), y, z, Node(20f0), Node(50f0),
-    Node(true), false, ybuf, zbuf, false, Threads.Condition(), nothing)
+  scope = Scope(fap, TIME, Float32(fs), n, nfft, Observable(1), Observable(true), y, z, Observable(20f0), Observable(50f0),
+    Observable(true), false, ybuf, zbuf, false, Threads.Condition(), nothing)
   annotate(scope)
   on(events(fap.figure).keyboardbutton) do event
     Consume(keypress(scope, event.action, event.key))
@@ -81,12 +81,12 @@ function mode!(scope::Scope, mode::Mode)
   scope.mode = mode
   if mode == TIME
     t = range(0f0; length=scope.n, step=1000f0/scope.fs)
-    scope.y = Node(zeros(Float32, scope.n))
+    scope.y = Observable(zeros(Float32, scope.n))
     scope.ybuf = similar(scope.y[])
     scope.fap = lines(t, scope.y; axis=(xlabel="Time (ms)", xautolimitmargin=(0f0, 0f0)))
   elseif mode == FREQ
     f = rfftfreq(scope.nfft, scope.fs) ./ 1000f0
-    scope.y = Node(zeros(Float32, length(f)))
+    scope.y = Observable(zeros(Float32, length(f)))
     scope.ybuf = similar(scope.y[])
     scope.fap = lines(f, scope.y; axis=(xlabel="Frequency (kHz)", xautolimitmargin=(0f0, 0f0)))
     ylims!(scope.zmax[] - scope.zrange[], scope.zmax[])
